@@ -1,0 +1,596 @@
+Description: >
+  Network Stack for semmer-test (TEST) with Public and Private Subnets
+
+Parameters:
+  VpcCIDR:
+    Description: The VPC CIDR.
+    Type: String
+
+  AvailabilityZones:
+    Description: The AZs in the target region.
+    Type: CommaDelimitedList
+
+  PublicSubnetCIDR:
+    Description: The CIDR for the public subnet.
+    Type: CommaDelimitedList
+
+  PrivateSubnetCIDR:
+    Description: The CIDR for the app subnet.
+    Type: CommaDelimitedList
+
+  VpcFlowLogRetention:
+    Description: Retention Period of FlowLogs
+    Type: String
+
+  VpcFlowLogTrafficType:
+    Description: VPC Flow Log collection type
+    Type: String
+
+  PublicDomainName:
+    Description: The name of the Publci Route53 Zone this VPC is associated with
+    Type: String
+
+#  BuildKiteVPCId:
+#    Description: Include the BuildKite VPC in the Internal Zone Config
+#    Type: String
+
+Resources:
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-vpc"
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-igw"
+
+  DHCPOptions:
+    Type: AWS::EC2::DHCPOptions
+    Properties:
+      DomainName: !Ref PublicDomainName
+      DomainNameServers:
+      - AmazonProvidedDNS
+      Tags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-dhcp"
+
+  DHCPAssociation:
+    Type: AWS::EC2::VPCDHCPOptionsAssociation
+    Properties:
+      DhcpOptionsId: !Ref DHCPOptions
+      VpcId: !Ref VPC
+
+  FlowLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        -
+          Effect: "Allow"
+          Principal:
+            Service:
+              - "vpc-flow-logs.amazonaws.com"
+          Action:
+            - "sts:AssumeRole"
+      Path: "/"
+      RoleName: !Sub "${AWS::StackName}-${AWS::Region}-vpc-flow-log"
+
+  FlowLogPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: "allow_cw_logs"
+      PolicyDocument:
+        Statement:
+        -
+          Effect: "Allow"
+          Action:
+           - "logs:CreateLogGroup"
+           - "logs:CreateLogStream"
+           - "logs:PutLogEvents"
+           - "logs:DescribeLogGroups"
+           - "logs:DescribeLogStreams"
+          Resource: "*"
+      Roles:
+        -
+          !Ref FlowLogRole
+
+  CloudWatchLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "${AWS::StackName}-${AWS::Region}-log-group"
+      RetentionInDays: !Ref VpcFlowLogRetention
+
+  MainFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      DeliverLogsPermissionArn : !GetAtt FlowLogRole.Arn
+      LogGroupName : !Ref CloudWatchLogGroup
+      ResourceId : !Ref VPC
+      ResourceType : VPC
+      TrafficType : !Ref VpcFlowLogTrafficType
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  # Public Subnet
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !Ref AvailabilityZones ]
+      CidrBlock: !Select [ 0, !Ref PublicSubnetCIDR ]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-public-1"
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !Ref AvailabilityZones ]
+      CidrBlock: !Select [ 1, !Ref PublicSubnetCIDR ]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-public-2"
+
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 2, !Ref AvailabilityZones ]
+      CidrBlock: !Select [ 2, !Ref PublicSubnetCIDR ]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-public-3"
+
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatGateway3EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NATGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+
+  NATGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+
+  NATGateway3:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway3EIP.AllocationId
+      SubnetId: !Ref PublicSubnet3
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value:  !Sub "${AWS::StackName}-public"
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation1:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        SubnetId: !Ref PublicSubnet1
+        RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation2:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        SubnetId: !Ref PublicSubnet2
+        RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation3:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        SubnetId: !Ref PublicSubnet3
+        RouteTableId: !Ref PublicRouteTable
+
+  PublicAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-public"
+
+  # Incoming
+
+  PublicAclRule1:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: false
+      NetworkAclId: !Ref PublicAcl
+      PortRange:
+        From: 0
+        To: 65535
+      Protocol: 6
+      RuleAction : allow
+      RuleNumber : 100
+
+  # Outgoing
+
+  PublicAclRule2:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: true
+      NetworkAclId: !Ref PublicAcl
+      PortRange:
+        From: 0
+        To: 65535
+      Protocol: 6
+      RuleAction : allow
+      RuleNumber : 100
+
+  PublicAclRuleAssociation1:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      NetworkAclId: !Ref PublicAcl
+
+  PublicAclRuleAssociation2:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      NetworkAclId: !Ref PublicAcl
+
+  PublicAclRuleAssociation3:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet3
+      NetworkAclId: !Ref PublicAcl
+
+  # Private Subnet
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !Ref AvailabilityZones ]
+      CidrBlock: !Select [ 0, !Ref PrivateSubnetCIDR ]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-private-1"
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !Ref AvailabilityZones ]
+      CidrBlock: !Select [ 1, !Ref PrivateSubnetCIDR ]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-private-2"
+
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 2, !Ref AvailabilityZones ]
+      CidrBlock: !Select [ 2, !Ref PrivateSubnetCIDR ]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-private-3"
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value:  !Sub "${AWS::StackName}-private-a"
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value:  !Sub "${AWS::StackName}-private-b"
+
+  PrivateRouteTable3:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value:  !Sub "${AWS::StackName}-private-c"
+
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway1
+
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway2
+
+  PrivateRoute3:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable3
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway3
+
+  PrivateSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+
+  PrivateSubnetRouteTableAssociation3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet3
+      RouteTableId: !Ref PrivateRouteTable3
+
+  PrivateAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-private"
+
+
+  # Incoming
+
+  PrivateAclRule1:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: false
+      NetworkAclId: !Ref PrivateAcl
+      PortRange:
+        From: 123
+        To: 123
+      Protocol: 17
+      RuleAction : allow
+      RuleNumber : 100
+
+  PrivateAclRule2:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      Egress: false
+      NetworkAclId: !Ref PrivateAcl
+      PortRange:
+        From: 443
+        To: 443
+      Protocol: 6
+      RuleAction : allow
+      RuleNumber : 200
+
+  PrivateAclRule3:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      Egress: false
+      NetworkAclId: !Ref PrivateAcl
+      PortRange:
+        From: 80
+        To: 80
+      Protocol: 6
+      RuleAction : allow
+      RuleNumber : 201
+
+  PrivateAclRule4:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      Egress: false
+      NetworkAclId: !Ref PrivateAcl
+      PortRange:
+        From: 22
+        To: 22
+      Protocol: 6
+      RuleAction : allow
+      RuleNumber : 700
+
+  PrivateAclRule5:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: false
+      NetworkAclId: !Ref PrivateAcl
+      PortRange:
+        From: 1024
+        To: 65535
+      Protocol: 6
+      RuleAction : allow
+      RuleNumber : 900
+
+  # Outgoing
+
+  PrivateAclRule6:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: true
+      NetworkAclId: !Ref PrivateAcl
+      PortRange:
+        From: 123
+        To: 123
+      Protocol: 17
+      RuleAction : allow
+      RuleNumber : 100
+
+  PrivateAclRule7:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: true
+      NetworkAclId: !Ref PrivateAcl
+      PortRange:
+        From: 80
+        To: 80
+      Protocol: 6
+      RuleAction : allow
+      RuleNumber : 200
+
+  PrivateAclRule8:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: true
+      NetworkAclId: !Ref PrivateAcl
+      PortRange:
+        From: 443
+        To: 443
+      Protocol: 6
+      RuleAction : allow
+      RuleNumber : 201
+
+  PrivateAclRule9:
+      Type: AWS::EC2::NetworkAclEntry
+      Properties:
+        CidrBlock: 203.34.100.20/32
+        Egress: true
+        NetworkAclId: !Ref PrivateAcl
+        PortRange:
+          From: 22
+          To: 22
+        Protocol: 6
+        RuleAction : allow
+        RuleNumber : 300
+
+  PrivateAclRule10:
+      Type: AWS::EC2::NetworkAclEntry
+      Properties:
+        CidrBlock: 0.0.0.0/0
+        Egress: true
+        NetworkAclId: !Ref PrivateAcl
+        PortRange:
+          From: 1024
+          To: 65535
+        Protocol: 6
+        RuleAction : allow
+        RuleNumber : 900
+
+  PrivateAclRuleAssociation1:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      NetworkAclId: !Ref PrivateAcl
+
+  PrivateAclRuleAssociation2:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      NetworkAclId: !Ref PrivateAcl
+
+  PrivateAclRuleAssociation3:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet3
+      NetworkAclId: !Ref PrivateAcl
+
+  InternalZone:
+    Type: "AWS::Route53::HostedZone"
+    Properties:
+      HostedZoneConfig:
+        Comment: "Hosted Zone for semmer-test Internal Applications"
+      HostedZoneTags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-Internal-Zone"
+      Name: "semmer-test.internal"
+      VPCs:
+        - VPCId: !Ref VPC
+          VPCRegion: ap-southeast-2
+#        - VPCId: !Ref BuildKiteVPCId
+          VPCRegion: ap-southeast-2
+
+Outputs:
+
+  VPCID:
+    Description: A reference to the created VPC
+    Value: !Ref VPC
+    Export:
+        Name: !Sub "${AWS::StackName}-VpcID"
+
+  VPCCIDR:
+    Description: A reference to the created VPC
+    Value: !Ref VpcCIDR
+    Export:
+        Name: !Sub "${AWS::StackName}-VpcCIDR"
+
+  AZS:
+    Description: A reference to the Availability Zones
+    Value: !Join [ ",", !Ref AvailabilityZones ]
+    Export:
+        Name: !Sub "${AWS::StackName}-AZS"
+
+  PublicSubnets:
+    Description: A list of the public subnets
+    Value: !Join [ ",", [ !Ref PublicSubnet1, !Ref PublicSubnet2, !Ref PublicSubnet3 ]]
+    Export:
+        Name: !Sub "${AWS::StackName}-PublicSubnets"
+
+  PrivateSubnets:
+    Description: A list of the private subnets
+    Value: !Join [ ",", [ !Ref PrivateSubnet1, !Ref PrivateSubnet2, !Ref PrivateSubnet3 ]]
+    Export:
+        Name: !Sub "${AWS::StackName}-PrivateSubnets"
+
+  InternalRoute53Zone:
+    Description: Private Route 53 Zone for this VPC
+    Value: !Ref InternalZone
+
+  ExternalRoute53Zone:
+    Description: Public Route 53 Zone for this VPC
+    Value: !Ref PublicDomainName
