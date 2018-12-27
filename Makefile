@@ -1,8 +1,8 @@
-export vpc-name=TESTNetwork
+export vpc-name=Network
 deploy-test: env := test
 deploy-prod: env := prod
 
-deloy-%:
+deploy-%:
 	docker-compose run --rm stackup ${env}-${vpc-name} up -t network.yml -p params.yml
 
 destroy-%:
