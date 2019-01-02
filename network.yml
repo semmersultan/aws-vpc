@@ -390,58 +390,6 @@ Resources:
 
   # Incoming
 
-  PrivateAclRule1:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      CidrBlock: 0.0.0.0/0
-      Egress: false
-      NetworkAclId: !Ref PrivateAcl
-      PortRange:
-        From: 123
-        To: 123
-      Protocol: 17
-      RuleAction : allow
-      RuleNumber : 100
-
-  PrivateAclRule2:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      CidrBlock: !Ref VpcCIDR
-      Egress: false
-      NetworkAclId: !Ref PrivateAcl
-      PortRange:
-        From: 443
-        To: 443
-      Protocol: 6
-      RuleAction : allow
-      RuleNumber : 200
-
-  PrivateAclRule3:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      CidrBlock: !Ref VpcCIDR
-      Egress: false
-      NetworkAclId: !Ref PrivateAcl
-      PortRange:
-        From: 80
-        To: 80
-      Protocol: 6
-      RuleAction : allow
-      RuleNumber : 201
-
-  PrivateAclRule4:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      CidrBlock: !Ref VpcCIDR
-      Egress: false
-      NetworkAclId: !Ref PrivateAcl
-      PortRange:
-        From: 22
-        To: 22
-      Protocol: 6
-      RuleAction : allow
-      RuleNumber : 700
-
   PrivateAclRule5:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
@@ -449,65 +397,13 @@ Resources:
       Egress: false
       NetworkAclId: !Ref PrivateAcl
       PortRange:
-        From: 1024
+        From: 0
         To: 65535
       Protocol: 6
       RuleAction : allow
-      RuleNumber : 900
-
-  # Outgoing
-
-  PrivateAclRule6:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      CidrBlock: 0.0.0.0/0
-      Egress: true
-      NetworkAclId: !Ref PrivateAcl
-      PortRange:
-        From: 123
-        To: 123
-      Protocol: 17
-      RuleAction : allow
       RuleNumber : 100
 
-  PrivateAclRule7:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      CidrBlock: 0.0.0.0/0
-      Egress: true
-      NetworkAclId: !Ref PrivateAcl
-      PortRange:
-        From: 80
-        To: 80
-      Protocol: 6
-      RuleAction : allow
-      RuleNumber : 200
-
-  PrivateAclRule8:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      CidrBlock: 0.0.0.0/0
-      Egress: true
-      NetworkAclId: !Ref PrivateAcl
-      PortRange:
-        From: 443
-        To: 443
-      Protocol: 6
-      RuleAction : allow
-      RuleNumber : 201
-
-  PrivateAclRule9:
-      Type: AWS::EC2::NetworkAclEntry
-      Properties:
-        CidrBlock: 203.34.100.20/32
-        Egress: true
-        NetworkAclId: !Ref PrivateAcl
-        PortRange:
-          From: 22
-          To: 22
-        Protocol: 6
-        RuleAction : allow
-        RuleNumber : 300
+  # Outgoing
 
   PrivateAclRule10:
       Type: AWS::EC2::NetworkAclEntry
@@ -516,11 +412,11 @@ Resources:
         Egress: true
         NetworkAclId: !Ref PrivateAcl
         PortRange:
-          From: 1024
+          From: 0
           To: 65535
         Protocol: 6
         RuleAction : allow
-        RuleNumber : 900
+        RuleNumber : 100
 
   PrivateAclRuleAssociation1:
     Type: AWS::EC2::SubnetNetworkAclAssociation
